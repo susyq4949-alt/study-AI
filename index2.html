@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>두근두근 자리 바꾸기</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Gaegu', cursive;
+            background-color: #f0fdf4;
+        }
+        .seat-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .shuffling {
+            animation: bounce 0.5s infinite;
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+        .selected-seat {
+            border: 4px solid #f59e0b !important;
+            transform: scale(1.05);
+            z-index: 10;
+        }
+        @media print {
+            .no-print { display: none; }
+            .print-area { margin: 0; padding: 0; }
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+
+    <div class="max-w-5xl mx-auto bg-white rounded-3xl shadow-xl overflow-hidden border-4 border-green-200">
+        <!-- Header -->
+        <header class="bg-green-400 p-6 text-center text-white relative">
+            <h1 class="text-4xl md:text-5xl font-bold mb-2">🎁 두근두근 자리 바꾸기</h1>
+            <p class="text-xl opacity-90">우리 반의 새로운 자리를 정해봐요!</p>
+            <div class="absolute top-4 right-6 text-4xl hidden md:block">🏫</div>
+            <div class="absolute top-4 left-6 text-4xl hidden md:block">🎈</div>
+        </header>
+
+        <div class="p-6">
+            <!-- Settings Panel -->
+            <section class="no-print bg-green-50 rounded-2xl p-6 mb-8 border-2 border-dashed border-green-300">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-xl font-bold mb-2 text-green-700">1. 학생 명단 입력 (쉼표나 줄바꿈으로 구분)</label>
+                        <textarea id="studentInput" class="w-full h-32 p-4 rounded-xl border-2 border-green-200 focus:outline-none focus:border-green-500 text-lg" placeholder="홍길동, 김철수, 이영희..."></textarea>
+                    </div>
+                    <div class="flex flex-col justify-between">
+                        <div>
+                            <label class="block text-xl font-bold mb-2 text-green-700">2. 교실 구조 설정</label>
+                            <div class="flex items-center gap-4 mb-4">
+                                <div>
+                                    <span class="block text-sm text-gray-500">가로(열)</span>
+                                    <input type="number" id="colsInput" value="6" min="1" class="w-20 p-2 rounded-lg border-2 border-green-200 text-center text-lg">
+                                </div>
+                                <div class="text-2xl pt-4">×</div>
+                                <div>
+                                    <span class="block text-sm text-gray-500">세로(행)</span>
+                                    <input type="number" id="rowsInput" value="5" min="1" class="w-20 p-2 rounded-lg border-2 border-green-200 text-center text-lg">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="shuffleSeats()" class="flex-1 bg-orange-400 hover:bg-orange-500 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition text-2xl">
+                                🎲 자리 섞기!
+                            </button>
+                            <button onclick="window.print()" class="bg-blue-400 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition">
+                                🖨️ 인쇄
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Classroom Area -->
+            <div class="relative print-area">
+                <!-- Chalkboard/Front -->
+                <div class="w-full bg-slate-700 text-white py-3 rounded-t-xl text-center text-2xl font-bold mb-10 border-b-8 border-slate-800 shadow-inner">
+                    🖥️ 칠판 (앞쪽)
+                </div>
+
+                <!-- Seats Grid -->
+                <div id="seatingGrid" class="grid gap-4 justify-center overflow-x-auto pb-8">
+                    <!-- Seats will be generated here -->
+                </div>
+            </div>
+        </div>
+
+        <footer class="bg-gray-50 p-4 text-center text-gray-500 border-t">
+            <p>팁: 자리를 섞은 후 이름을 클릭하면 자리를 수동으로 맞바꿀 수 있어요!</p>
+        </footer>
+    </div>
+
+    <!-- Message Box (Custom Alert) -->
+    <div id="messageBox" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 hidden z-50">
+        <div class="bg-white p-8 rounded-3xl shadow-2xl text-center max-w-sm border-4 border-green-400">
+            <div id="messageIcon" class="text-6xl mb-4">✨</div>
+            <p id="messageContent" class="text-2xl font-bold text-gray-800 mb-6"></p>
+            <button onclick="closeMessage()" class="bg-green-500 text-white px-8 py-2 rounded-full text-xl font-bold hover:bg-green-600">확인</button>
+        </div>
+    </div>
+
+    <script>
+        let students = [];
+        let currentLayout = [];
+        let selectedIndex = null;
+
+        // 초기 데이터 세팅 (예시)
+        document.getElementById('studentInput').value = "강민준, 권도현, 김민서, 김지안, 노준서, 박서준, 박예은, 배하람, 서우현, 신아윤, 안유나, 양우진, 오지후, 윤서아, 이다인, 이로운, 이준우, 임지민, 정재현, 조예준, 최수아, 한결, 한소희, 황지우";
+
+        function showMessage(msg, icon = '✨') {
+            document.getElementById('messageContent').innerText = msg;
+            document.getElementById('messageIcon').innerText = icon;
+            document.getElementById('messageBox').classList.remove('hidden');
+        }
+
+        function closeMessage() {
+            document.getElementById('messageBox').classList.add('hidden');
+        }
+
+        function getStudentsFromInput() {
+            const input = document.getElementById('studentInput').value;
+            return input.split(/[,|\n]/)
+                .map(s => s.trim())
+                .filter(s => s !== "");
+        }
+
+        function renderGrid() {
+            const cols = parseInt(document.getElementById('colsInput').value);
+            const rows = parseInt(document.getElementById('rowsInput').value);
+            const grid = document.getElementById('seatingGrid');
+            
+            grid.style.gridTemplateColumns = `repeat(${cols}, minmax(100px, 150px))`;
+            grid.innerHTML = '';
+
+            const totalSeats = rows * cols;
+
+            for (let i = 0; i < totalSeats; i++) {
+                const studentName = currentLayout[i] || "";
+                const seat = document.createElement('div');
+                seat.className = `seat-card relative h-20 md:h-24 bg-white border-2 border-green-100 rounded-2xl shadow-sm flex items-center justify-center text-xl md:text-2xl font-bold cursor-pointer hover:shadow-md hover:border-green-300 ${studentName ? 'bg-white' : 'bg-gray-50 opacity-50 border-dashed'}`;
+                
+                if (selectedIndex === i) {
+                    seat.classList.add('selected-seat');
+                }
+
+                seat.innerHTML = `
+                    <span class="z-1">${studentName || "빈 자리"}</span>
+                    ${studentName ? '<div class="absolute top-1 right-2 text-xs opacity-20">🪑</div>' : ''}
+                `;
+
+                seat.onclick = () => handleSeatClick(i);
+                grid.appendChild(seat);
+            }
+        }
+
+        function handleSeatClick(index) {
+            if (selectedIndex === null) {
+                if (currentLayout[index]) {
+                    selectedIndex = index;
+                    renderGrid();
+                }
+            } else {
+                if (selectedIndex === index) {
+                    selectedIndex = null;
+                } else {
+                    // Swap
+                    const temp = currentLayout[selectedIndex];
+                    currentLayout[selectedIndex] = currentLayout[index];
+                    currentLayout[index] = temp;
+                    selectedIndex = null;
+                }
+                renderGrid();
+            }
+        }
+
+        function shuffleSeats() {
+            const inputStudents = getStudentsFromInput();
+            if (inputStudents.length === 0) {
+                showMessage("학생 이름을 먼저 입력해주세요!", "⚠️");
+                return;
+            }
+
+            const cols = parseInt(document.getElementById('colsInput').value);
+            const rows = parseInt(document.getElementById('rowsInput').value);
+            const totalSeats = cols * rows;
+
+            if (inputStudents.length > totalSeats) {
+                showMessage(`자리가 부족해요! 최소 ${inputStudents.length}개의 자리가 필요합니다.`, "📏");
+                return;
+            }
+
+            // Shuffle Animation
+            const grid = document.getElementById('seatingGrid');
+            const seats = grid.querySelectorAll('.seat-card');
+            seats.forEach(s => s.classList.add('shuffling'));
+
+            setTimeout(() => {
+                // Fisher-Yates Shuffle
+                let shuffled = [...inputStudents];
+                // Fill empty slots
+                while (shuffled.length < totalSeats) {
+                    shuffled.push("");
+                }
+
+                for (let i = shuffled.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                }
+
+                currentLayout = shuffled;
+                renderGrid();
+                showMessage("새로운 자리가 결정되었습니다!", "🎊");
+            }, 800);
+        }
+
+        // 초기 그리드 그리기
+        window.onload = () => {
+            const inputStudents = getStudentsFromInput();
+            currentLayout = [...inputStudents];
+            renderGrid();
+        };
+
+        // 입력값이 바뀔 때마다 그리드 갱신 (선택사항)
+        document.getElementById('colsInput').onchange = renderGrid;
+        document.getElementById('rowsInput').onchange = renderGrid;
+    </script>
+</body>
+</html>
